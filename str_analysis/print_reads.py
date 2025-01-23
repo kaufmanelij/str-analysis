@@ -31,8 +31,7 @@ def main():
     args = parser.parse_args()
     from str_analysis.utils.cram_bam_utils import IntervalReader
 
-    # Print the methods of the IntervalReader class
-    print(dir(IntervalReader))
+   
     # Validate args
     if args.debug:
         args.verbose = True
@@ -89,13 +88,6 @@ def main():
     # Count reads
     read_count = 0
     for read in reader.fetch_reads():
-        read_count += 1
-
-    print(f"Total reads in the specified intervals: {read_count}")
-    reader.close()
-    
-    read_count = 0
-    for read in reader.get_reads():  # Use the correct method name here
         read_count += 1
 
     print(f"Total reads in the specified intervals: {read_count}")
