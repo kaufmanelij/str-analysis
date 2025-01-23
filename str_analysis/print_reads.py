@@ -12,6 +12,16 @@ from str_analysis.utils.misc_utils import parse_interval
 from str_analysis.utils.cram_bam_utils import IntervalReader
 pysam.set_verbosity(0)
 
+# Add this method to the IntervalReader class
+def count_reads(self):
+    read_count = 0
+    for read in self.fetch_reads():
+        read_count += 1
+    return read_count
+
+# Ensure the IntervalReader class includes the new method
+IntervalReader.count_reads = count_reads
+
 def main():
     parser = argparse.ArgumentParser(description="Retrieve reads from a CRAM or BAM file that overlap one or more "
                                                  "genomic intervals, or are unmapped.")
