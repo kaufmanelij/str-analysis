@@ -13,26 +13,28 @@ from str_analysis.utils.cram_bam_utils import IntervalReader
 pysam.set_verbosity(0)
 
 def main():
-    parser = argparse.ArgumentParser(description="Count reads from a CRAM or BAM file that overlap one or more "
+    parser = argparse.ArgumentParser(description="Retrieve reads from a CRAM or BAM file that overlap one or more "
                                                  "genomic intervals, or are unmapped.")
     parser.add_argument("-u", "--gcloud-project", help="Google Cloud project to use for GCS requester pays buckets.")
+    parser.add_argument("--read-index", help="Optional path of the input BAM or CRAM index file. This can be a local or a gs:// path")
     parser.add_argument("-R", "--reference-fasta", help="Optional reference genome FASTA file used when reading the CRAM file")
-    parser.add_argument("-L", "--interval", action="append", default=[], help="The script will count aligned reads that "
+    parser.add_argument("-L", "--interval", action="append", default=[], help="The script will output aligned reads that "
                         "overlap the given genomic interval(s). The value can be the path of a .bed file, .bed.gz file, "
                         ".interval_list file, an interval in the format \"chr:start-end\" with a 0-based start "
-                        "coordinate, or a chromosome name (ie. \"chrM\").")
+                        "coordinate, or a chromosome name (ie. \"chrM\"). If a read within a given interval has an "
+                        "unmapped mate, the mate will be included in the output. If a mate is mapped somewhere beyond "
+                        "the specified interval(s), the mate will not be included. Read pairs where both mates are "
+                        "unmapped will not be included in the output unless --include-unmapped-read-pairs is specified.")
     parser.add_argument("--padding", type=int, default=0, help="Number of bases with which to pad each interval")
     parser.add_argument("--include-unmapped-read-pairs", action="store_true",
-                        help="Count read pairs where both mates are unmapped. This can be specified in addition to or "
+                        help="Output read pairs where both mates are unmapped. This can be specified in addition to or "
                              "instead of -L intervals.")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("input_bam_or_cram", help="Input BAM or CRAM file. This can be a local or a gs:// path")
     args = parser.parse_args()
-    from str_analysis.utils.cram_bam_utils import IntervalReader
 
-   
-    # Validate args
+    # validate args
     if args.debug:
         args.verbose = True
 
@@ -40,19 +42,20 @@ def main():
         parser.error("At least one --interval or --include-unmapped-read-pairs arg must be specified")
 
     set_requester_pays_project(args.gcloud_project)
-    if not file_exists(args.input_bam_or_cram):
-        parser.error(f"{args.input_bam_or_cram} not found")
+    for path in args.input_bam_or_cram, args.read_index:
+        if path and not file_exists(path):
+            parser.error(f"{path} not found")
 
     reader = IntervalReader(
         args.input_bam_or_cram,
-        crai_or_bai_path=None,
+        crai_or_bai_path=args.read_index,
         include_unmapped_read_pairs=args.include_unmapped_read_pairs,
         reference_fasta_path=args.reference_fasta,
         verbose=args.verbose,
         debug=args.debug,
     )
 
-    # Add intervals to reader
+    # process intervals
     for interval in args.interval:
         if interval.endswith(".bed") or interval.endswith(".bed.gz") or interval.endswith(".interval_list"):
             if not file_exists(interval):
@@ -67,7 +70,7 @@ def main():
                         parser.error(f"Expected at least 3 columns in line {line}")
                     chrom, start, end = fields[:3]
                     start_offset = 1 if interval.endswith(".interval_list") else 0
-                    start = int(start) - start_offset  # Convert to 0-based coordinates
+                    start = int(start) - start_offset  # convert to 0-based coordinates
                     end = int(end)
                     if start > end:
                         parser.error(f"start coordinate {start} is greater than the end coordinate {end}")
@@ -85,12 +88,9 @@ def main():
             except ValueError as e:
                 parser.error(f"Invalid interval {interval}  {e}")
 
-    # Count reads
-    read_count = 0
-    for read in reader.fetch_reads():
-        read_count += 1
+    read_counts = reader.count_reads()
+    print(f"Number of reads: {read_counts}")
 
-    print(f"Total reads in the specified intervals: {read_count}")
     reader.close()
 
 if __name__ == "__main__":
