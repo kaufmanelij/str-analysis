@@ -4,8 +4,6 @@ import intervaltree
 import os
 import re
 import pysam
-import collections
-import tempfile
 
 from google.cloud import storage
 
@@ -13,31 +11,6 @@ from str_analysis.utils.file_utils import set_requester_pays_project, file_exist
 from str_analysis.utils.misc_utils import parse_interval
 from str_analysis.utils.cram_bam_utils import IntervalReader
 pysam.set_verbosity(0)
-
-# Add this method to the IntervalReader class
-def fetch_reads(self):
-    if self._is_cram_file:
-        with tempfile.NamedTemporaryFile(suffix=".cram") as temp_cram_container_file:
-            self._load_cram_containers(temp_cram_container_file)
-            temp_cram_container_file.seek(0)
-            with pysam.AlignmentFile(temp_cram_container_file.name, reference_filename=self._reference_fasta_path) as input_file:
-                for chrom, start, end in self._get_merged_intervals():
-                    for read in input_file.fetch(chrom, start, end):
-                        yield read
-                if self._include_unmapped_read_pairs:
-                    for read in input_file.fetch(until_eof=True):
-                        yield read
-    elif self._is_bam_file:
-        with pysam.AlignmentFile(self._cram_or_bam_path, index_filename=self._crai_or_bai_path, reference_filename=self._reference_fasta_path) as input_file:
-            for chrom, start, end in self._get_merged_intervals():
-                for read in input_file.fetch(chrom, start, end):
-                    yield read
-            if self._include_unmapped_read_pairs:
-                for read in input_file.fetch(until_eof=True):
-                    yield read
-
-# Ensure the IntervalReader class includes the new method
-IntervalReader.fetch_reads = fetch_reads
 
 def main():
     parser = argparse.ArgumentParser(description="Retrieve reads from a CRAM or BAM file that overlap one or more "
@@ -115,7 +88,7 @@ def main():
             except ValueError as e:
                 parser.error(f"Invalid interval {interval}  {e}")
 
-    read_counts = sum(1 for _ in reader.fetch_reads())
+    read_counts = reader.count_reads()
     print(f"Number of reads: {read_counts}")
 
     reader.close()
