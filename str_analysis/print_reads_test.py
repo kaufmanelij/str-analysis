@@ -5,6 +5,9 @@ import os
 import re
 import pysam
 import pandas as pd
+import collections
+import tempfile
+import hashlib
 
 from google.cloud import storage
 
